@@ -39,7 +39,7 @@ def load_tsv_files():
     for year in range(2003, this_year + 1):
         tsv_file = Path(f'public/reservoir-history/{year}.tsv')
         if tsv_file.exists():
-            contents.append(tsv_file.read_text())
+            contents.append(tsv_file.read_text(encoding='utf8'))
         else:
             logger.warning(f"找不到 {tsv_file}")
 
