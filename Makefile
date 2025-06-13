@@ -1,5 +1,6 @@
 IMAGE_NAME=tw-reservoir
 CONTAINER_NAME=tw-reservoir
+PYTHON=py
 
 OPTIONS:=
 
@@ -12,20 +13,23 @@ stop:
 shell: run
 	docker exec -it ${CONTAINER_NAME} /bin/bash
 
-build: venv/bin/activate
+build: venv/Scripts/activate
 
 server: build
-	. venv/bin/activate; python -m main
+	. venv/Scripts/activate; $(PYTHON) -m main
 
 deploy:
 	gcloud app deploy --project='reservoir-358117' --promote --stop-previous-version ${OPTIONS}
 
 update:
-	source venv/bin/activate && python app/data.py >> public/reservoir-history/$$(date "+%Y").tsv
+	source venv/Scripts/activate && $(PYTHON) app/data.py >> public/reservoir-history/$$(date "+%Y").tsv
 	git diff
+
+clean:
+	rm -rf venv
 
 ################################################
 
-venv/bin/activate: requirements.txt
-	python -m venv venv
-	. venv/bin/activate; pip install -r requirements.txt
+venv/Scripts/activate: requirements.txt
+	$(PYTHON) -m venv venv
+	. venv/Scripts/activate; pip install -r requirements.txt
