@@ -1,3 +1,8 @@
+import sys
+import io
+import json
+import csv
+import math
 from datetime import date, datetime, timedelta
 import hashlib
 import logging
@@ -5,6 +10,7 @@ from pathlib import Path
 from threading import Timer
 import time
 from zoneinfo import ZoneInfo
+import requests
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.gzip import GZipMiddleware
@@ -20,6 +26,8 @@ TPE_TIMEZONE = ZoneInfo("Asia/Taipei")
 TSV_FROM_FILE = ''
 TSV_SUPPLEMENTAL = ''  # 歷史檔案裡面缺少的固定資料點（每月 1, 8, 15, 22 日）
 TSV_LATEST = ''  # 此刻的最新資料
+
+TRMNL_PLUGIN_ID = ""
 
 PREV_UPDATE_TIME = datetime.now().timestamp()
 NEXT_UPDATE_TIME = datetime.now().timestamp()
@@ -95,6 +103,9 @@ def livespan(app: FastAPI):
         except:
             logger.exception("[updater] 更新資料時發生錯誤")
             interval = 2000
+
+        if TRMNL_PLUGIN_ID != "":
+            generate_data_for_trmnl()
 
         NEXT_UPDATE_TIME = time.time() + interval
 
@@ -195,8 +206,137 @@ def fetch_new_data():
 
     logger.warning("[fetch_new_data] 最新資料點已更新")
 
+def generate_data_for_trmnl():
+    full_tsv = TSV_FROM_FILE + TSV_SUPPLEMENTAL + TSV_LATEST
+
+    day_delta = 8
+
+    ret = {}
+    reservoir_arr = [
+        "翡翠水庫",
+        "石門水庫",
+        "寶山第二水庫",
+        "德基水庫",
+        "日月潭水庫",
+        # "鯉魚潭水庫",
+        "曾文水庫",
+        # "南化水庫",
+    ]
+    full_dict = dict()
+
+    ret['curr'] = ""
+    ret['prev'] = ""
+    ret['worst'] = ""
+
+    for reservoir in reservoir_arr:
+        full_dict.setdefault(reservoir, dict())
+
+    full_tsv = TSV_FROM_FILE + TSV_SUPPLEMENTAL + TSV_LATEST
+    tsv_file = io.StringIO(full_tsv)
+    csv_reader = csv.reader(tsv_file, delimiter='\t')
+    for row in csv_reader:
+        name, max, level, record_date = row
+        if not name in full_dict:
+            continue
+        max = float(max)
+        level = float(level)
+        if max == -1 or level == -1 or max == 0:
+            percent = 0
+        else:
+            percent = level / max
+            # Somehow reservoir level can overflow !?
+            if percent > 1:
+                percent = 1
+        full_dict[name].setdefault(record_date, percent)
+
+    def update_data(year):
+        data = ""
+        start_date = datetime(year=year, month=1, day=1).date()
+        end_date   = datetime(year=year+1, month=1, day=1).date()
+        today = datetime.now(ZoneInfo("Asia/Taipei")).date()
+        idx = 0
+        current_date = start_date
+        while current_date < end_date and current_date < today:
+            current_date_str = current_date.strftime('%Y-%m-%d')
+            level_arr = []
+
+            for r in reservoir_arr:
+                offset = 1
+                while True:
+                    latter_date_str = (current_date + timedelta(days=offset)).strftime('%Y-%m-%d')
+                    earlier_date_str = (current_date - timedelta(days=offset)).strftime('%Y-%m-%d')
+                    if current_date_str in full_dict[r]:
+                        level_arr.append(int(full_dict[r][current_date_str] * 100))
+                        break
+                    elif latter_date_str in full_dict[r]:
+                        level_arr.append(int(full_dict[r][latter_date_str] * 100))
+                        break
+                    elif earlier_date_str in full_dict[r]:
+                        level_arr.append(int(full_dict[r][earlier_date_str] * 100))
+                        break
+                    else:
+                        offset += 1
+
+            # Compress a list of numbers (0-100) into a byte array. Each number is stored in 7 bits.
+            # These data easily hit 2K size limit...
+            compressed = bytearray()
+            buffer = 0
+            bits_in_buffer = 0
+            for level in level_arr:
+                # Ensure number is in valid range
+                if level < 0 or level > 100:
+                    raise ValueError("Numbers must be between 0 and 100")
+
+                # Add the 7-bit number to the buffer
+                buffer = (buffer << 7) | level
+                bits_in_buffer += 7
+
+                # While we have at least 8 bits, output bytes
+                while bits_in_buffer >= 8:
+                    bits_to_extract = bits_in_buffer - 8
+                    byte = (buffer >> bits_to_extract) & 0xFF
+                    compressed.append(byte)
+                    buffer &= (1 << bits_to_extract) - 1
+                    bits_in_buffer -= 8
+
+            # Add remaining bits if any (with zero padding)
+            if bits_in_buffer > 0:
+                byte = (buffer << (8 - bits_in_buffer)) & 0xFF
+                compressed.append(byte)
+
+            data += compressed.hex()+','
+            current_date += timedelta(days=day_delta)
+            idx += 1
+        return data[0:-1]
+
+    today = datetime.now(ZoneInfo("Asia/Taipei")).date()
+    ret['curr'] += update_data(today.year)
+    ret['prev'] += update_data(today.year-1)
+    ret['worst'] += update_data(2021)
+    ret['r_len'] = len(reservoir_arr)
+    ret['l_len'] = math.ceil(365/day_delta)
+
+    payload = {}
+    payload['merge_variables'] = ret
+
+    url = "https://usetrmnl.com/api/custom_plugins/" + TRMNL_PLUGIN_ID
+
+    # print(json.dumps(payload))
+    # print("json size: %d" % len(json.dumps(payload)))
+
+    resp = requests.post(url, json=payload)
+    logger.warning(resp)
+    logger.warning(resp.text)
 
 if __name__ == '__main__':
+    if (len(sys.argv) > 1):
+        TRMNL_PLUGIN_ID = sys.argv[1]
+        if TRMNL_PLUGIN_ID == "null":
+            logger.warning("[startup] TRMNL plugin UUID was set to `null`. TRMNL routine will be skipped")
+            TRMNL_PLUGIN_ID = ""
+    else:
+        logger.warning("[startup] TRMNL plugin UUID was not set. TRMNL routine will be skipped")
+
     app.add_middleware(GZipMiddleware, minimum_size=1000)
     import uvicorn
     uvicorn.run("main:app", port=80, host='0.0.0.0', reload=True, log_level='debug')

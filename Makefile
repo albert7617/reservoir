@@ -1,6 +1,7 @@
 IMAGE_NAME=tw-reservoir
 CONTAINER_NAME=tw-reservoir
 PYTHON=py
+TRMNL_PLUGIN_ID=null
 
 OPTIONS:=
 
@@ -16,7 +17,7 @@ shell: run
 build: venv/Scripts/activate
 
 server: build
-	. venv/Scripts/activate; $(PYTHON) -m main
+	. venv/Scripts/activate; $(PYTHON) -m main $(TRMNL_PLUGIN_ID)
 
 deploy:
 	gcloud app deploy --project='reservoir-358117' --promote --stop-previous-version ${OPTIONS}
