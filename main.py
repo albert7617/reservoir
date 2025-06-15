@@ -1,5 +1,5 @@
-import sys
 import io
+import os
 import json
 import csv
 import math
@@ -329,13 +329,17 @@ def generate_data_for_trmnl():
     logger.warning(resp.text)
 
 if __name__ == '__main__':
-    if (len(sys.argv) > 1):
-        TRMNL_PLUGIN_ID = sys.argv[1]
-        if TRMNL_PLUGIN_ID == "null":
+
+    env_trmnl_plugin_id = os.getenv("ENV_TRMNL_PLUGIN_ID")
+
+    if env_trmnl_plugin_id is None:
+        logger.warning("[startup] TRMNL plugin UUID was not set. TRMNL routine will be skipped")
+    else:
+        if env_trmnl_plugin_id == "null":
             logger.warning("[startup] TRMNL plugin UUID was set to `null`. TRMNL routine will be skipped")
             TRMNL_PLUGIN_ID = ""
-    else:
-        logger.warning("[startup] TRMNL plugin UUID was not set. TRMNL routine will be skipped")
+        else:
+            TRMNL_PLUGIN_ID = env_trmnl_plugin_id
 
     app.add_middleware(GZipMiddleware, minimum_size=1000)
     import uvicorn

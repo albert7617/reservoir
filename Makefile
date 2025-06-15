@@ -3,6 +3,8 @@ CONTAINER_NAME=tw-reservoir
 PYTHON=py
 TRMNL_PLUGIN_ID=null
 
+export ENV_TRMNL_PLUGIN_ID=$(TRMNL_PLUGIN_ID)
+
 OPTIONS:=
 
 up:
@@ -11,13 +13,16 @@ up:
 stop:
 	docker stop ${CONTAINER_NAME}
 
+buildDocker:
+	docker build -t ${CONTAINER_NAME} .
+
 shell: run
 	docker exec -it ${CONTAINER_NAME} /bin/bash
 
 build: venv/Scripts/activate
 
 server: build
-	. venv/Scripts/activate; $(PYTHON) -m main $(TRMNL_PLUGIN_ID)
+	. venv/Scripts/activate; $(PYTHON) -m main
 
 deploy:
 	gcloud app deploy --project='reservoir-358117' --promote --stop-previous-version ${OPTIONS}
