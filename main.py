@@ -85,7 +85,19 @@ def tsv_to_curr_data(tsv: str):
 
 
 def livespan(app: FastAPI):
-    global UPDATE_TIMER
+    global UPDATE_TIMER, TRMNL_PLUGIN_ID
+
+    env_trmnl_plugin_id = os.getenv("ENV_TRMNL_PLUGIN_ID")
+
+    if env_trmnl_plugin_id is None:
+        logger.warning("[startup] TRMNL plugin UUID was not set. TRMNL routine will be skipped")
+        TRMNL_PLUGIN_ID = ""
+    else:
+        if env_trmnl_plugin_id == "null":
+            logger.warning("[startup] TRMNL plugin UUID was set to `null`. TRMNL routine will be skipped")
+            TRMNL_PLUGIN_ID = ""
+        else:
+            TRMNL_PLUGIN_ID = env_trmnl_plugin_id
 
     logger.warning("[startup] 從檔案載入歷史資料")
     load_tsv_files()
@@ -93,7 +105,7 @@ def livespan(app: FastAPI):
     logger.warning("[startup] 排定撈最新資料")
 
     def updater():
-        global NEXT_UPDATE_TIME, PREV_UPDATE_TIME, UPDATE_TIMER
+        global NEXT_UPDATE_TIME, PREV_UPDATE_TIME, UPDATE_TIMER, TRMNL_PLUGIN_ID
 
         logger.warning("[updater] 啟動")
         interval = UPDATE_INTERVAL
@@ -329,18 +341,6 @@ def generate_data_for_trmnl():
     logger.warning(resp.text)
 
 if __name__ == '__main__':
-
-    env_trmnl_plugin_id = os.getenv("ENV_TRMNL_PLUGIN_ID")
-
-    if env_trmnl_plugin_id is None:
-        logger.warning("[startup] TRMNL plugin UUID was not set. TRMNL routine will be skipped")
-    else:
-        if env_trmnl_plugin_id == "null":
-            logger.warning("[startup] TRMNL plugin UUID was set to `null`. TRMNL routine will be skipped")
-            TRMNL_PLUGIN_ID = ""
-        else:
-            TRMNL_PLUGIN_ID = env_trmnl_plugin_id
-
     app.add_middleware(GZipMiddleware, minimum_size=1000)
     import uvicorn
     uvicorn.run("main:app", port=80, host='0.0.0.0', reload=True, log_level='debug')
