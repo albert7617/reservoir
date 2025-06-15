@@ -13,8 +13,19 @@ up:
 stop:
 	docker stop ${CONTAINER_NAME}
 
-buildDocker:
+dockerbuild:
 	docker build -t ${CONTAINER_NAME} .
+
+dockerclean:
+	docker stop ${CONTAINER_NAME} || true
+	docker rm ${CONTAINER_NAME} || true
+
+dockerrun: dockerclean
+	docker run -d \
+			--name ${CONTAINER_NAME} \
+			--restart always \
+			-p 8080:8080 \
+			${CONTAINER_NAME}
 
 shell: run
 	docker exec -it ${CONTAINER_NAME} /bin/bash
