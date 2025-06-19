@@ -3,8 +3,6 @@ CONTAINER_NAME=tw-reservoir
 PYTHON=py
 TRMNL_PLUGIN_ID=null
 
-export ENV_TRMNL_PLUGIN_ID=$(TRMNL_PLUGIN_ID)
-
 OPTIONS:=
 
 up:
@@ -24,7 +22,8 @@ dockerrun: dockerclean
 	docker run -d \
 			--name ${CONTAINER_NAME} \
 			--restart always \
-			-p 8080:8080 \
+			-p 8089:8080 \
+			-e ENV_TRMNL_PLUGIN_ID=$(TRMNL_PLUGIN_ID) \
 			${CONTAINER_NAME}
 
 shell: run
