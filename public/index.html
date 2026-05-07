@@ -485,7 +485,7 @@ gtag('config', 'G-93370QFS9E');
 
 <a id="link_to_top" href="#top">⇧</a>
 <footer>
-<p>資料來源：經濟部水利署<a href="https://fhy.wra.gov.tw/fhyv2/monitor/reservoir">水庫蓄水統計表</a>與<a href="https://www.wra.gov.tw/cp.aspx?n=30968">水情燈號</a>
+<p>資料來源：經濟部水利署<a href="https://fhy.wra.gov.tw/fhyv2/monitor/reservoir">水庫蓄水統計表</a>與<a href="https://www.wra.gov.tw/EarlyWarning.aspx?n=18804">水情燈號</a>
 
 <p>水庫資料大多為各水庫管理單位手動輸入，實際水位更新時間會有落差</p>
 
@@ -552,7 +552,7 @@ const reservoir_locations = {
 
 // 水情燈號是不是沒有 API 可以抓...
 // 好像也沒有好爬的官方頁面
-// 水利署： https://www.wra.gov.tw/cp.aspx?n=30968
+// 水利署： https://www.wra.gov.tw/EarlyWarning.aspx?n=18804
 ALERTS = {
   // 紅燈
   "hsl(0, 80%, 75%)": [],
@@ -561,8 +561,7 @@ ALERTS = {
   // 黃燈
   "hsl(60, 80%, 75%)": [],
   // 綠燈
-  "hsl(90, 80%, 75%)": [
-  ],
+  "hsl(90, 80%, 75%)": ["台中市", "新竹縣", "新竹市"],
 }
 
 function setCookie(name, value, days) {
@@ -650,7 +649,7 @@ function fillrateToColor(fill_rate, full_rgb, half_rgb, dry_rgb) {
   const DRY_RGB  = dry_rgb  || [255, 20, 0];
   let color_str = 'rgba(0,160,240)'
   if (fill_rate <= 0) {
-    color_str = 'rgb(128, 0, 128)'
+    color_str = 'rgb(128, 128, 128)'
   } else if (fill_rate < 0.5) {
     color_str = middleColor(DRY_RGB, HALF_RGB, (fill_rate) / 0.5)
   } else if (fill_rate < 0.9) {
@@ -714,6 +713,8 @@ function groupChart(group_data) {
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`)
 
   function makeG(name, size, fill_rate) {
+    fill_rate = Math.min(fill_rate, 1);  // 正規化，但 <0 會當作沒資料處理，不能設定 lower bound
+
     const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
 
     size = Math.pow(size, 0.5)
@@ -750,8 +751,8 @@ function groupChart(group_data) {
 
     const percent_text = document.createElementNS("http://www.w3.org/2000/svg", "text");
     percent_text.textContent = `${(fill_rate*100).toPrecision(3)}%`
-    if (fill_rate < 0.1) {
-      percent_text.textContent = '???%'
+    if (fill_rate < 0.001) {
+      percent_text.textContent = '--- %'
     }
     percent_text.classList.add('percent')
     percent_text.setAttribute('stroke', color_str)
@@ -1089,7 +1090,7 @@ function mapDraw() {
   // 水庫
   Object.keys(reservoir_locations).forEach(name => {
     const [x, y] = reservoir_locations[name]
-    const res_circle = document.createElementNS("http://www.w3.org/2000/svg", "circle")
+    const res_circle = mapdoc.getElementById(name) || document.createElementNS("http://www.w3.org/2000/svg", "circle")
 
     const base_radius = 4
     const radius = base_radius + Math.sqrt(reservoir_capacity[name]) / 13
@@ -1110,8 +1111,9 @@ function mapDraw() {
   })
 
   Object.keys(reservoir_locations).forEach(name => {
+    const text_ele_id = `${name}_text`
     const [x, y] = reservoir_locations[name]
-    const res_text = document.createElementNS("http://www.w3.org/2000/svg", "text")
+    const res_text = mapdoc.getElementById(text_ele_id) || document.createElementNS("http://www.w3.org/2000/svg", "text")
 
     let fill_rate = 0.0
     if (reservoir_capacity[name]) {
@@ -1129,7 +1131,7 @@ function mapDraw() {
     res_text.textContent = `${name} ${(fill_rate*100).toFixed(1)}%`
     res_text.setAttribute('x', Math.min(x + x_offset, 370))
     res_text.setAttribute('y', Math.max(y + y_offset, 30))
-    res_text.setAttribute('id', `${name}_text`)
+    res_text.setAttribute('id', text_ele_id)
     reses.append(res_text)
 
     if (["翡翠水庫", "石門水庫", "德基水庫", "日月潭水庫", "曾文水庫"].includes(name)) {
@@ -1280,7 +1282,7 @@ function stddev(values){
 }
 
 function assetver() {
-  return `202500509-${parseInt(new Date().getTime()/3600000)}`
+  return `202500807-${parseInt(new Date().getTime()/3600000)}`
 }
 
 </script>
@@ -1328,10 +1330,22 @@ fetch(`/api/reservoir-history.tsv?v=${assetver()}`)
     let [reservoir, capacity, current, ymd] = line.split("\t")
     let year = ymd.split('-')[0]
 
-    // 做一筆假資料，讓 {year}-12-22 在圖上會連到 {year+1}-01-01
-    if (`${year}-01-01` == ymd && year > START_YEAR) {
-      let prev_ymd = `${year-1}-12-31`
-      reservoir_history[reservoir][year-1][prev_ymd] = current
+    // 做假資料，讓年頭年尾可以連起來
+    if (
+        `${year}-01-01` == ymd
+        && year > START_YEAR
+        && reservoir_history[reservoir]
+        && reservoir_history[reservoir][year-1]
+        && !reservoir_history[reservoir][year-1][`${year-1}-12-31`]
+    ) {
+      reservoir_history[reservoir][year-1][`${year-1}-12-31`] = current
+    }
+    else if ([`${year}-12-31`, `${year}-12-30`].includes(ymd) && reservoir_history[reservoir]) {
+      const next_year = parseInt(year) + 1
+      reservoir_history[reservoir][next_year] = reservoir_history[reservoir][next_year] || {}
+      if (!reservoir_history[reservoir][next_year][`${next_year}-01-01`]) {
+        reservoir_history[reservoir][next_year][`${next_year}-01-01`] = current
+      }
     }
 
     reservoir_history[reservoir] = reservoir_history[reservoir] || {}
@@ -1348,7 +1362,6 @@ fetch(`/api/reservoir-history.tsv?v=${assetver()}`)
 })
 .then(() => {
   redraw()
-  mapDraw()
   if (window.location.hash) {
     window.location = window.location
   }
