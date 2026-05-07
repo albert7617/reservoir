@@ -35,8 +35,8 @@ UPDATE_INTERVAL = 3600
 UPDATE_TIMER: Timer = None
 
 
-# CURR_DATA[{水庫名稱}] = [最大蓄水量, 目前蓄水量]
-CURR_DATA: dict[str, list[float]] = {}
+# CURR_DATA[{水庫名稱}] = [日期, 最大蓄水量, 目前蓄水量]
+CURR_DATA: dict[str, tuple[str, float, float]] = {}
 TSV_CURR: str = ''
 
 def load_tsv_files():
@@ -58,8 +58,12 @@ def load_tsv_files():
 def tsv_to_curr_data(tsv: str):
     global TSV_CURR
 
-    now = datetime.now(tz=TPE_TIMEZONE)
-    delta_7 = timedelta(days=7)
+    now = datetime.now(TPE_TIMEZONE)
+
+    # 如果資料超過 30 天，不把它納入目前蓄水量的計算（資料久未更新？）
+    # 但是最大蓄水量的資料不受此限制，避免不必要的分母錯誤
+    thirty_days_ago_str = (now - timedelta(days=30)).strftime('%Y-%m-%d')
+
     for line in tsv.split('\n'):
         fields = line.split('\t')
 
@@ -68,20 +72,23 @@ def tsv_to_curr_data(tsv: str):
 
         name, max, curr, dt_str = fields
 
-        dt = datetime.strptime(dt_str, '%Y-%m-%d').astimezone(tz=TPE_TIMEZONE)
-        too_old = now - dt > delta_7
+        line_max_f = float(max)
+        line_curr_f = float(curr)
 
-        max_f = float(max)
-        curr_f = float(curr)
 
-        if name not in CURR_DATA:
-            CURR_DATA[name] = [-1.0, -1.0]
-        if max_f > 0:
-            CURR_DATA[name][0] = max_f
-        if curr_f > 0 and not too_old:
-            CURR_DATA[name][1] = curr_f
+        c_dt_str, c_max_f, c_curr_f = CURR_DATA.get(name, ("1970-01-01", -1.0, -1.0))
 
-    TSV_CURR = '\n'.join(f"{name}\t{max}\t{curr}" for name, (max, curr) in CURR_DATA.items())
+        if line_max_f > 0:
+            c_max_f = line_max_f
+
+        if line_curr_f > 0 and dt_str >= thirty_days_ago_str:
+            c_curr_f = line_curr_f
+            c_dt_str = dt_str
+
+        CURR_DATA[name] = (c_dt_str, c_max_f, c_curr_f)
+
+
+    TSV_CURR = '\n'.join(f"{name}\t{max}\t{curr}" for name, (_, max, curr) in CURR_DATA.items())
 
 
 def livespan(app: FastAPI):
@@ -181,6 +188,13 @@ async def curr():
     return PlainTextResponse(TSV_CURR, headers=headers)
 
 
+
+@app.get("/api/CURR_DATA")
+async def curr_data():
+    return CURR_DATA
+
+
+
 def fetch_new_data():
     global TSV_SUPPLEMENTAL, TSV_LATEST, TSV_CURR
 
@@ -200,7 +214,6 @@ def fetch_new_data():
     logger.warning("[fetch_new_data] 固定資料點已更新")
 
     # 拉最新的資料
-    today_str = datetime.now(TPE_TIMEZONE).strftime('%Y-%m-%d')
     crawed_data = crawer.fetch()
 
     if len(crawed_data) <= 0:
@@ -208,7 +221,7 @@ def fetch_new_data():
         return
 
     lines = [f"{name}\t{max}\t{curr}\t{today_str}\n"
-                for name, (max, curr) in crawed_data.items()]
+                for name, (max, curr, today_str) in crawed_data.items()]
     TSV_LATEST = "".join(lines)
 
     # 紀錄目前蓄水量/最大蓄水量
@@ -343,4 +356,4 @@ def generate_data_for_trmnl():
 if __name__ == '__main__':
     app.add_middleware(GZipMiddleware, minimum_size=1000)
     import uvicorn
-    uvicorn.run("main:app", port=80, host='0.0.0.0', reload=True, log_level='debug')
+    uvicorn.run("main:app", port=8080, host='0.0.0.0', reload=True, log_level='debug')
