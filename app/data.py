@@ -155,17 +155,13 @@ class ReservoirCrawler:
         end_date = end_date or datetime.now(ZoneInfo("Asia/Taipei")).date() - timedelta(days=1)
 
         lines = []
-        for y in range(begin_date.year, end_date.year + 1):
-            for m in range(1, 13):
-                for d in (1, 8, 15, 22):
-                    cursor_dt = date(y, m, d)
-                    if cursor_dt < begin_date:
-                        continue
-                    if cursor_dt >= end_date:
-                        break
+        cursor_dt = begin_date
+        while cursor_dt < end_date:
+            data = self.fetch(cursor_dt)
+            for name, (max_val, curr, dt_str) in data.items():
+                lines.append(f"{name}\t{max_val}\t{curr}\t{dt_str}\n")
 
-                    lines.extend(f"{name}\t{max}\t{curr}\t{dt_str}\n" \
-                                 for name, (max, curr, dt_str) in self.fetch(cursor_dt).items())
+            cursor_dt += timedelta(days=1)
 
         return "".join(lines)
 
@@ -203,27 +199,23 @@ if __name__ == '__main__':
 
     tsv_file = "%s/../public/reservoir-history/%s.tsv" % (os.path.dirname(__file__), current_year)
 
-    begin_date_ymd = sys.argv[1] if len(sys.argv) > 1 else None
-    end_date_ymd = sys.argv[2] if len(sys.argv) > 2 else None
+    begin_year = sys.argv[1] if len(sys.argv) > 1 else None
 
-    begin_date_ymd = begin_date_ymd or get_last_ymd_from_file() or '2003-12-31'
+    if not begin_year:
+        sys.exit("請提供開始年份，格式為 YYYY")
 
-    def ymd_to_date(ymd: str | None) -> date:
-        if not ymd:
-            return datetime.now().date()
+    begin_dt = date(int(begin_year), 1, 1)
 
-        yy, mm, dd = map(lambda val_str: int(val_str), ymd.split("-"))
-        return date(yy, mm, dd)
-
-    begin_dt = ymd_to_date(begin_date_ymd)
-    begin_dt = begin_dt + timedelta(days=1)
-
-    end_dt = ymd_to_date(end_date_ymd)
+    if begin_dt.year == now.year:
+        end_dt = now.date()
+    else:
+        end_dt = date(begin_dt.year, 12, 31)
 
     logger.warning("開始撈取 %s 到 %s 的資料", begin_dt, end_dt)
 
     crawer = ReservoirCrawler()
-    print(crawer.fetch_uppdated_as_tsv(begin_date=begin_dt, end_date=end_dt), end='')
+    with open(begin_year+".tsv", 'w', encoding='utf-8') as f:
+        f.write(crawer.fetch_uppdated_as_tsv(begin_date=begin_dt, end_date=end_dt))
 
     if begin_dt.year != end_dt.year:
         logger.warning("資料開始/結束年份不同（%d vs %d），可能需要手動調整檔案", begin_dt.year, end_dt.year)
