@@ -1,5 +1,6 @@
 import io
 import os
+from pathlib import Path
 import json
 import csv
 import math
@@ -223,6 +224,12 @@ def fetch_new_data():
     lines = [f"{name}\t{max}\t{curr}\t{today_str}\n"
                 for name, (max, curr, today_str) in crawed_data.items()]
     TSV_LATEST = "".join(lines)
+
+    script_dir = Path(__file__).parent
+    # Pathlib converts / to \ on Windows automatically
+    latest_tsv = script_dir / "public" / "reservoir-history" / ("%d.tsv" % datetime.now().year)
+    with open(latest_tsv, 'a', encoding='utf-8') as f:
+        f.write(TSV_LATEST)
 
     # 紀錄目前蓄水量/最大蓄水量
     logger.warning("[fetch_new_data] 更新水庫目前蓄水量/最大蓄水量")
