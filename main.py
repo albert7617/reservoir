@@ -15,6 +15,7 @@ import requests
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.exceptions import RequestValidationError
 from starlette.responses import FileResponse, PlainTextResponse, JSONResponse
 
 from app.data import ReservoirCrawler
@@ -145,6 +146,26 @@ def livespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=livespan)
+
+@app.middleware("http")
+async def strip_path_prefix(request: Request, call_next):
+    logger.warning(f"Original path: {request.url.path}")  # Debug statement
+    prefix = "/reservoir"
+    prefix_len = len(prefix)
+    if request.url.path.startswith(prefix):
+        request.scope["path"] = request.scope["path"][prefix_len:]
+
+    response = await call_next(request)
+    return response
+
+# Disable detailed validation errors in production
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=422,
+        content={"detail": "Invalid request parameters"},  # Generic error
+    )
+
 
 @app.get("/")
 @app.get("/favicon.png")
