@@ -13,11 +13,12 @@ import time
 from zoneinfo import ZoneInfo
 import requests
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.gzip import GZipMiddleware
-from starlette.responses import FileResponse, PlainTextResponse
+from starlette.responses import FileResponse, PlainTextResponse, JSONResponse
 
-from app.data import ReservoirCrawler, RESERVOIR_GROUPS
+from app.data import ReservoirCrawler
+from app.draw import plot_legend, plot_reservoir
 
 
 logger = logging.getLogger(__name__)
@@ -145,7 +146,6 @@ def livespan(app: FastAPI):
 
 app = FastAPI(lifespan=livespan)
 
-
 @app.get("/")
 @app.get("/favicon.png")
 @app.get("/github.svg")
@@ -188,6 +188,24 @@ async def curr():
     }
     return PlainTextResponse(TSV_CURR, headers=headers)
 
+@app.get("/api/plot.svg")
+async def reservoir_plot(width: int = 385, height: int = 193, reservoir: str = ""):
+# async def reservoir_plot(width: int = 780, height: int = 460, reservoir: str = ""):
+    # Generate SVG
+    full_tsv = TSV_FROM_FILE + TSV_SUPPLEMENTAL + TSV_LATEST
+    print(f"[reservoir_plot] Generating plot for {reservoir} with width={width} and height={height}")
+    svg_content = plot_reservoir(reservoir, width, height, full_tsv, TSV_CURR)
+
+    headers = {"Cache-Control": "public, max-age=21600"}
+    return Response(content=svg_content, media_type="image/svg+xml", headers=headers)
+
+@app.get("/api/plot_legend.svg")
+async def reservoir_plot_legend(width: int = 385, height: int = 20):
+    # Generate SVG
+    svg_content = plot_legend(width, height)
+
+    headers = {"Cache-Control": "public, max-age=21600"}
+    return Response(content=svg_content, media_type="image/svg+xml", headers=headers)
 
 
 @app.get("/api/CURR_DATA")

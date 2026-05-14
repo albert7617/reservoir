@@ -2,3 +2,4 @@
 /.vscode
 /credential
 /.python-version
+__pycache__
