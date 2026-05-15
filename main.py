@@ -97,7 +97,7 @@ def tsv_to_curr_data(tsv: str):
 def livespan(app: FastAPI):
     global UPDATE_TIMER, TRMNL_PLUGIN_ID
 
-    env_trmnl_plugin_id = os.getenv("ENV_TRMNL_PLUGIN_ID")
+    env_trmnl_plugin_id = os.getenv("TRMNL_PLUGIN_API_KEY")
 
     if env_trmnl_plugin_id is None:
         logger.warning("[startup] TRMNL plugin UUID was not set. TRMNL routine will be skipped")
