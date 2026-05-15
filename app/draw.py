@@ -54,13 +54,13 @@ def plot_reservoir(reservoir, width, height, full_tsv, curr_tsv) -> str:
 
     # Text & Months
     ctx.select_font_face("Noto Sans TC",
-                         cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
-    ctx.set_font_size(20)
+                         cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+    ctx.set_font_size(16)
 
     # Center reservoir name at top
     xbear, ybear, t_width, t_height, xadv, yadv = ctx.text_extents(reservoir)
     ctx.move_to((width / 2) - (t_width / 2) - xbear, chart_top + t_height + 2)
-    ctx.set_source_rgba(0, 0, 0, 0.6) # Subtle grey-black
+    ctx.set_source_rgba(0, 0, 0, 1.0)
     ctx.show_text(reservoir)
 
     chart_top = t_height + 10  # Increased from 6 to make room for title
@@ -124,23 +124,8 @@ def plot_reservoir(reservoir, width, height, full_tsv, curr_tsv) -> str:
 
         ctx.stroke()
 
-    # Grid lines
-    ctx.set_source_rgb(0.3, 0.3, 0.3)
-    ctx.set_line_width(1)
-    grid_pts = [
-        (1, chart_top + 1), (1, chart_bottom - 1),
-        (width - 1, chart_bottom - 1), (width - 1, chart_top + 1)
-    ]
-    ctx.move_to(5, chart_top + 1)
-    for px, py in grid_pts:
-        ctx.line_to(px, py)
-    ctx.line_to(width - 5, chart_top + 1)
-    ctx.stroke()
-
-    # Text & Months
-    ctx.select_font_face("Noto Sans TC",
-                         cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
     ctx.set_font_size(12)
+    ctx.set_source_rgb(0.0, 0.0, 0.0)
 
     months = [
         (20, '二月'), (80, '四月'), (141, '六月'),
@@ -151,8 +136,12 @@ def plot_reservoir(reservoir, width, height, full_tsv, curr_tsv) -> str:
         ctx.move_to(mx, height - 4)
         ctx.show_text(name)
 
+    # Grid lines
+    ctx.set_source_rgb(0.3, 0.3, 0.3)
+    ctx.set_line_width(1)
+
     # Vertical grid lines
-    months = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334]
+    months = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 363]
     ctx.set_dash([2.0, 4.0], 0)
     for day in months:
         mx = width * day / 365
@@ -162,7 +151,7 @@ def plot_reservoir(reservoir, width, height, full_tsv, curr_tsv) -> str:
     # reset to solid
 
     # Horizontal grid lines
-    quater = [25, 50, 75, 100]
+    quater = [0, 25, 50, 75, 100]
     for q in quater:
         my = chart_top + (1.0 - q / Y_AXIS_CEILING_PCT) * (chart_bottom - chart_top)
         ctx.move_to(0, my)
