@@ -40,8 +40,8 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application code
-COPY . .
+# Mount the application directory at runtime instead of baking the source into the image
+VOLUME ["/app"]
 
 EXPOSE 8080
 

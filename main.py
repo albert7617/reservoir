@@ -294,10 +294,11 @@ def livespan(app: FastAPI):
     UPDATE_TIMER.start()
     logger.warning("[startup] 排定更新資料")
 
+    # Disable this since it is not used in TRMNL
     # 雨量圖快取：開機後盡快灌第一張，之後每 RAINFALL_REFRESH_INTERVAL 秒更新一次
-    RAINFALL_TIMER = Timer(0.1, rainfall_updater)
-    RAINFALL_TIMER.start()
-    logger.warning("[startup] 排定更新雨量圖")
+    # RAINFALL_TIMER = Timer(0.1, rainfall_updater)
+    # RAINFALL_TIMER.start()
+    # logger.warning("[startup] 排定更新雨量圖")
 
     yield
 
@@ -438,7 +439,13 @@ def fetch_new_data():
     last_date_str = tsv[-11:-1]
 
     yy, mm, dd = map(lambda val_str: int(val_str), last_date_str.split("-"))
-    last_date = date(yy, mm, dd)
+    last_date_tsv = date(yy, mm, dd)
+
+    last_date = datetime.now().date()
+
+    if last_date_tsv == last_date:
+        logger.warning(f"最新資料時間是 {last_date}，不需要撈取更新的資料")
+        return
 
     logger.warning(f"最新資料時間是 {last_date}，撈取更新的資料")
 
