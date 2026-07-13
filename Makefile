@@ -18,11 +18,12 @@ dockerclean:
 	docker stop ${CONTAINER_NAME} || true
 	docker rm ${CONTAINER_NAME} || true
 
-dockerrun: dockerclean
+dockerrun:
 	docker run -d \
 			--name ${CONTAINER_NAME} \
 			--restart always \
 			-p 8089:8080 \
+			-v ${CURDIR}:/app \
 			-e TRMNL_PLUGIN_API_KEY=$(TRMNL_PLUGIN_API_KEY) \
 			${CONTAINER_NAME}
 
