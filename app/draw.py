@@ -4,6 +4,17 @@ from datetime import datetime
 
 WORST_YEAR = 2021
 
+
+def _normalize_ymd(value: str) -> str:
+    if value is None:
+        return ""
+    value = value.strip()
+    if not value:
+        return ""
+    value = value.replace("T", " ", 1)
+    return value.split(" ", 1)[0]
+
+
 def tsv_to_dict(tsv: str):
     lines = tsv.split("\n")
     reservoir_history = {}
@@ -14,7 +25,15 @@ def tsv_to_dict(tsv: str):
         if not line:
             break
 
-        reservoir, capacity, current, ymd = line.split("\t")
+        parts = line.split("\t")
+        if len(parts) < 4:
+            continue
+
+        reservoir, capacity, current = parts[:3]
+        ymd = _normalize_ymd(parts[3])
+        if not ymd:
+            continue
+
         year_str = ymd.split('-')[0]
         year = int(year_str)
 
@@ -107,7 +126,12 @@ def plot_reservoir(reservoir, width, height, full_tsv, curr_tsv) -> str:
         for ymd, amount in dates.items():
             amount = amount if amount > 0 else last_amount
 
-            dt = datetime.strptime(ymd, "%Y-%m-%d")
+            normalized_ymd = _normalize_ymd(str(ymd))
+            try:
+                dt = datetime.strptime(normalized_ymd, "%Y-%m-%d")
+            except ValueError:
+                continue
+
             day_of_year = (dt - year_start).days
 
             x = width * day_of_year / total_day_of_year

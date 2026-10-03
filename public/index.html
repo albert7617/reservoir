@@ -1379,6 +1379,9 @@ fetch(`/api/reservoir-history.tsv?v=${assetver()}`)
 
     if (!line) return;
     let [reservoir, capacity, current, ymd] = line.split("\t")
+    if (ymd.indexOf('T') > 0) {
+      ymd = ymd.split('T')[0]
+    }
     let year = ymd.split('-')[0]
 
     // 做假資料，讓年頭年尾可以連起來

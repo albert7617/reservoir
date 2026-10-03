@@ -159,14 +159,16 @@ def tsv_to_curr_data(tsv: str):
     for line in tsv.split('\n'):
         fields = line.split('\t')
 
-        if len(fields) != 4:
+        if len(fields) == 4:
+            name, max, curr, dt_str = fields
+        elif len(fields) == 5:
+            name, max, curr, date_part, time_part = fields
+            dt_str = f"{date_part} {time_part}".strip()
+        else:
             continue
-
-        name, max, curr, dt_str = fields
 
         line_max_f = float(max)
         line_curr_f = float(curr)
-
 
         c_dt_str, c_max_f, c_curr_f = CURR_DATA.get(name, ("1970-01-01", -1.0, -1.0))
 
@@ -179,8 +181,28 @@ def tsv_to_curr_data(tsv: str):
 
         CURR_DATA[name] = (c_dt_str, c_max_f, c_curr_f)
 
-
     TSV_CURR = '\n'.join(f"{name}\t{max}\t{curr}" for name, (_, max, curr) in CURR_DATA.items())
+
+
+def _last_record_date_from_tsv(tsv: str) -> date | None:
+    """從最後一筆有效紀錄解析出日期；兼容 4 欄與 5 欄 TSV。"""
+    for line in reversed(tsv.splitlines()):
+        fields = [field.strip() for field in line.split('\t')]
+        if len(fields) < 4:
+            continue
+
+        date_part = fields[3]
+        if len(fields) > 4:
+            date_part = fields[3]
+        if ' ' in date_part:
+            date_part = date_part.split(' ', 1)[0]
+
+        try:
+            return date.fromisoformat(date_part)
+        except ValueError:
+            continue
+
+    return None
 
 
 def _cwa_rainfall_urls(hours_back: int = 6):
@@ -436,18 +458,17 @@ def fetch_new_data():
 
     # 更新固定資料點的資料
     tsv = TSV_SUPPLEMENTAL if TSV_SUPPLEMENTAL else TSV_FROM_FILE
-    last_date_str = tsv[-11:-1]
+    last_date_tsv = _last_record_date_from_tsv(tsv)
+    last_date = datetime.now(TPE_TIMEZONE).date()
 
-    yy, mm, dd = map(lambda val_str: int(val_str), last_date_str.split("-"))
-    last_date_tsv = date(yy, mm, dd)
-
-    last_date = datetime.now().date()
-
-    if last_date_tsv == last_date:
+    if last_date_tsv is not None and last_date_tsv == last_date:
         logger.warning(f"最新資料時間是 {last_date}，不需要撈取更新的資料")
         return
 
-    logger.warning(f"最新資料時間是 {last_date}，撈取更新的資料")
+    if last_date_tsv is not None:
+        logger.warning(f"最新資料時間是 {last_date_tsv}，撈取更新的資料")
+    else:
+        logger.warning("歷史資料中沒有可解析的最後日期，撈取更新的資料")
 
     crawer = ReservoirCrawler()
     TSV_SUPPLEMENTAL += crawer.fetch_uppdated_as_tsv(begin_date=last_date)
@@ -506,8 +527,10 @@ def generate_data_for_trmnl():
     tsv_file = io.StringIO(full_tsv)
     csv_reader = csv.reader(tsv_file, delimiter='\t')
     for row in csv_reader:
-        name, max, level, record_date = row
-        if not name in full_dict:
+        if len(row) < 4:
+            continue
+        name, max, level, record_date = row[:4]
+        if name not in full_dict:
             continue
         max = float(max)
         level = float(level)

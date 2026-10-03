@@ -98,7 +98,7 @@ class ReservoirCrawler:
         self, rows: list[dict], today: date,
     ) -> dict[str, tuple[float, float, str]]:
         """把一份 API 快照（RealTime 或 Daily）整理成
-        {站名: (有效容量, 有效蓄水量, 資料日期)}。"""
+        {站名: (有效容量, 有效蓄水量, 資料日期時間)}。"""
         stations = self._stations()
 
         result: dict[str, tuple[float, float, str]] = {}
@@ -108,8 +108,9 @@ class ReservoirCrawler:
                 continue
             name, capacity = station
 
-            time_str = r.get('Time') or ''
-            date_str = time_str[:10] or today.strftime('%Y-%m-%d')
+            time_str = (r.get('Time') or '').strip()
+            date_str = time_str[:10] if len(time_str) >= 10 else (time_str or today.strftime('%Y-%m-%d'))
+            snapshot_time = time_str or date_str
 
             storage = r.get('EffectiveStorage')
             current = float(storage) if storage and storage > 0 else -1.0
@@ -122,7 +123,7 @@ class ReservoirCrawler:
                 except ValueError:
                     pass
 
-            result[name] = (capacity, current, date_str)
+            result[name] = (capacity, current, snapshot_time)
 
         return result
 
@@ -212,7 +213,11 @@ def get_last_ymd_from_file() -> str:
             last_line = f.readline().decode().strip() or last_line
 
         if last_line.strip():
-            return last_line.split('\t')[-1].strip()
+            fields = last_line.split('\t')
+            if len(fields) >= 4:
+                last_value = fields[3].strip()
+                return last_value.split(' ')[0].strip()
+            return fields[-1].strip()
 
     return ""
 
